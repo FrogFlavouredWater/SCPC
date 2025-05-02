@@ -1,156 +1,173 @@
-NULL_CHAR = 0x00.to_bytes()
+import random
+import logging
 
-class uint:
-    NUM_BYTES = 0
-    NATIVE_TYPE = int
-    def __init__(self, value: int=0):
-        self.MAX_VALUE = 2**(self.NUM_BYTES * 8)
+try:
+    NULL_CHAR = 0x00.to_bytes()
 
-        if value > self.MAX_VALUE: raise OverflowError(f"Value {value} too large for {self.NUM_BYTES*8}-bit uint")
-        if value < 0: raise TypeError(f"{value} is not an unsigned integer")
+    class uint:
+        NUM_BYTES = 0
+        NATIVE_TYPE = int
+        def __init__(self, value: int=0):
+            self.MAX_VALUE = 2**(self.NUM_BYTES * 8)
 
-        self.value = value
+            if value > self.MAX_VALUE: raise OverflowError(f"Value {value} too large for {self.NUM_BYTES*8}-bit uint")
+            if value < 0: raise TypeError(f"{value} is not an unsigned integer")
 
-    def __int__(self):
-        return self.value
+            self.value = value
 
-    def __str__(self):
-        return str(self.value)
+        def __int__(self):
+            return self.value
 
-    @classmethod
-    def encode(cls, value: int):
-        """Turn value into bytes"""
-        return value.to_bytes(cls.NUM_BYTES)
+        def __str__(self):
+            return str(self.value)
 
-    @classmethod
-    def decode(cls, value: bytes):
-        """Turn bytes into this class"""
-        if len(value) < cls.NUM_BYTES:
-            raise ValueError("Wrong number of bytes")
+        @classmethod
+        def encode(cls, value: int):
+            """Turn value into bytes"""
+            return value.to_bytes(cls.NUM_BYTES)
 
-        return (int.from_bytes(value[:cls.NUM_BYTES]), cls.NUM_BYTES)
+        @classmethod
+        def decode(cls, value: bytes):
+            """Turn bytes into this class"""
+            if len(value) < cls.NUM_BYTES:
+                raise ValueError("Wrong number of bytes")
 
-class uint8(uint):
-    NUM_BYTES = 1
+            return (int.from_bytes(value[:cls.NUM_BYTES]), cls.NUM_BYTES)
 
-class uint16(uint):
-    NUM_BYTES = 2
+    class uint8(uint):
+        NUM_BYTES = 1
 
-class uint24(uint):
-    NUM_BYTES = 3
+    class uint16(uint):
+        NUM_BYTES = 2
 
-class uint32(uint):
-    NUM_BYTES = 4
+    class uint24(uint):
+        NUM_BYTES = 3
 
-class lds:
-    NATIVE_TYPE = str
-    def __init__(self, value: str=""):
-        if len(value) > 255:
-            raise OverflowError("String too long for LDS, use NTS instead")
+    class uint32(uint):
+        NUM_BYTES = 4
 
-        self.value = value
+    class lds:
+        NATIVE_TYPE = str
+        def __init__(self, value: str=""):
+            if len(value) > 255:
+                raise OverflowError("String too long for LDS, use NTS instead")
 
-    def __int__(self):
-        return int(self.value)
+            self.value = value
 
-    def __str__(self):
-        return self.value
+        def __int__(self):
+            return int(self.value)
 
-    @classmethod
-    def encode(cls, value: str):
-        """Turn value into bytes"""
-        enc = len(value).to_bytes()
-        enc += value.encode('unicode_escape')
+        def __str__(self):
+            return self.value
 
-        return enc
+        @classmethod
+        def encode(cls, value: str):
+            """Turn value into bytes"""
+            enc = len(value).to_bytes()
+            enc += value.encode('unicode_escape')
 
-    @classmethod
-    def decode(cls, value: bytes):
-        """Turn bytes into this class"""
-        length = value[0]
+            return enc
 
-        if len(value)-1 < length:
-            raise ValueError("Wrong number of bytes")
+        @classmethod
+        def decode(cls, value: bytes):
+            """Turn bytes into this class"""
+            length = value[0]
 
-        return (value[1:length+1].decode("unicode_escape"), length+1)
+            if len(value)-1 < length:
+                raise ValueError("Wrong number of bytes")
 
-class nts:
-    NATIVE_TYPE = str
-    def __init__(self, value: str=""):
-        self.value = value
+            return (value[1:length+1].decode("unicode_escape"), length+1)
 
-    def __int__(self):
-        return int(self.value)
+    class nts:
+        NATIVE_TYPE = str
+        def __init__(self, value: str=""):
+            self.value = value
 
-    def __str__(self):
-        return self.value
+        def __int__(self):
+            return int(self.value)
 
-    @classmethod
-    def encode(cls, value: str):
-        """Turn stored value into bytes"""
-        enc = value.encode('unicode_escape').replace(NULL_CHAR, bytes())
-        enc += NULL_CHAR
+        def __str__(self):
+            return self.value
 
-        return enc
+        @classmethod
+        def encode(cls, value: str):
+            """Turn stored value into bytes"""
+            enc = value.encode('unicode_escape').replace(NULL_CHAR, bytes())
+            enc += NULL_CHAR
 
-    @classmethod
-    def decode(cls, value: bytes):
-        """Turn bytes into this class"""
-        if not NULL_CHAR in value:
-            raise ValueError("No termination in NTS")
+            return enc
 
-        return (value.split(NULL_CHAR, 1)[0].decode("unicode_escape"), value.index(NULL_CHAR))
+        @classmethod
+        def decode(cls, value: bytes):
+            """Turn bytes into this class"""
+            if not NULL_CHAR in value:
+                raise ValueError("No termination in NTS")
 
-class ldi:  # length-delimited integer
-    NATIVE_TYPE = int
-    
-    def __init__(self, value: int=0):
-        self.value = value
-        
-    def __int__(self):
-        return self.value
-    
-    def __str__(self):
-        return str(self.value)
-    
-    @classmethod
-    def encode(cls, value: int):
+            return (value.split(NULL_CHAR, 1)[0].decode("unicode_escape"), value.index(NULL_CHAR))
+
+    class ldi:  # length-delimited integer
+        NATIVE_TYPE = int
         MAX_BYTES = 255
-        num_bytes = (value.bit_length() + 7) // 8
         
-        if value == 0:
-            return b'\x00'
+        def __init__(self, value: int=0):
+            self.value = value
+            
+        def __int__(self):
+            return self.value
         
-        value_bytes = value.to_bytes(num_bytes, byteorder='big', signed=True)
+        def __str__(self):
+            return str(self.value)
         
-        if num_bytes > MAX_BYTES: raise ValueError(f"Value too large. Maximum bytes in string: {MAX_BYTES}; Recieved: {num_bytes}")
+        @classmethod
+        def encode(cls, value: int):
+            num_bytes = (value.bit_length() + 7) // 8
+            
+            if value == 0:
+                return b'\x00'
 
-        return num_bytes.to_bytes() + value_bytes
+            try:
+                value_bytes = value.to_bytes(num_bytes, byteorder='big', signed=True)
+            except OverflowError:
+                raise OverflowError(f"Value too large. Maximum bytes in string: {cls.MAX_BYTES}; Recieved: {num_bytes}")
+            
+            
 
-    @classmethod
-    def decode(cls, data: bytes):
-        if len(data) == 0:
-            raise ValueError("No data to decode")
+            return num_bytes.to_bytes() + value_bytes
 
-        num_bytes = int.from_bytes(data[0:1], byteorder="big", signed=False)
+        @classmethod
+        def decode(cls, data: bytes):
+            if len(data) == 0:
+                raise ValueError("No data to decode")
 
-        if num_bytes == 0:
-            return (0, 1) 
+            num_bytes = int.from_bytes(data[0:1], byteorder="big", signed=False)
 
-        if len(data) < 1 + num_bytes:
-            raise ValueError("Not enough bytes to decode")
+            if num_bytes == 0:
+                return (0, 1) 
 
-        value_bytes = data[1:1+num_bytes]
-        value = int.from_bytes(value_bytes, byteorder='big', signed=True)
+            if len(data) < 1 + num_bytes:
+                raise ValueError("Not enough bytes to decode")
 
-        return (value, num_bytes)
+            value_bytes = data[1:1+num_bytes]
+            value = int.from_bytes(value_bytes, byteorder='big', signed=True)
+
+            return (value, num_bytes)
 
 
-def test_ldi(test_int):
-    encoded = ldi.encode(test_int)
-    print("Encoded:", list(encoded))
+    def test_ldi(test_int):
+        encoded = ldi.encode(test_int)
+        print("Encoded:", list(encoded))
 
-    decoded_value, bytes_used = ldi.decode(encoded)
-    print("Decoded:", decoded_value, "Bytes used:", bytes_used, "[+ prepending magnitude byte]")
+        decoded_value, bytes_used = ldi.decode(encoded)
+        print("Decoded:", decoded_value, "Bytes used:", bytes_used, "[+ prepending magnitude byte]")
+        
+    test_ldi((2**2039))
     
-test_ldi(pow(2,8*254)+1)
+    
+except Exception as fuckywucky:
+    logging.FUCK(f"Something went wrong and i have no fucking clue what it was, good luck debugging this one")
+    errors = ["KeyboardInterrupt", "ConnectionRefusedError", "ID10T Error", "StackUnderflowError"]
+    computer_choice = random.randint(1, 10)
+    if computer_choice < 5:
+        raise random.choice(errors)
+    else:
+        raise SyntaxError
