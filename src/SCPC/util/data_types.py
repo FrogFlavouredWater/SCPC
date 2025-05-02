@@ -145,12 +145,3 @@ class ldi:  # length-delimited integer
 
         return (value, num_bytes)
 
-
-def test_ldi(test_int):
-    encoded = ldi.encode(test_int)
-    print("Encoded:", list(encoded))
-
-    decoded_value, bytes_used = ldi.decode(encoded)
-    print("Decoded:", decoded_value, "Bytes used:", bytes_used, "[+ prepending magnitude byte]")
-    
-test_ldi(pow(2,8*254)+1)
